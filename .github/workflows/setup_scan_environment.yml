@@ -1,0 +1,81 @@
+# Copyright (c) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: "Setup Coverity Environment"
+run-name: "Setup Coverity by @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      coverity_version:
+        description: "Coverity version suffix (for cov-analysis-linux64-<version>)"
+        required: true
+        default: "2025.3.0"
+        type: string
+
+env:
+  COV_USER_HOME: ${{ vars.COV_USER_HOME }}
+
+jobs:
+  setup-tools:
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install or validate Coverity
+        run: |
+          set -euo pipefail
+          if [ -z "${COV_USER_HOME:-}" ]; then
+            echo "COV_USER_HOME is not set. Please configure repository variable vars.COV_USER_HOME first."
+            exit 1
+          fi
+
+          COV_PKG="cov-analysis-linux64-${{ inputs.coverity_version }}"
+          COV_HOME="${COV_USER_HOME}/${COV_PKG}"
+          COV_ARCHIVE_URL="https://af-amr01.devtools.intel.com/artifactory/coverity-or-local/Enterprise/${COV_PKG}.tar.gz"
+          COV_LICENSE_URL="https://af-amr01.devtools.intel.com/artifactory/coverity-or-local/Enterprise/license.dat"
+
+          echo "COV_HOME=${COV_HOME}" >> "$GITHUB_ENV"
+
+          if [ -x "${COV_HOME}/bin/coverity" ]; then
+            echo "Coverity already installed at ${COV_HOME}."
+          else
+            mkdir -p "${COV_USER_HOME}"
+            cd "${COV_USER_HOME}"
+
+            wget -q "${COV_ARCHIVE_URL}"
+            tar -xzf "${COV_PKG}.tar.gz"
+
+            wget -q "${COV_LICENSE_URL}"
+            mv license.dat "${COV_HOME}/bin/"
+
+            if [ ! -x "${COV_HOME}/bin/coverity" ]; then
+              echo "Coverity extracted but ${COV_HOME}/bin/coverity not found."
+              echo "Please verify coverity_version input matches extracted folder name."
+              exit 1
+            fi
+          fi
+
+          "${COV_HOME}/bin/coverity" --version
+
+      - name: Generate setup summary
+        if: always()
+        run: |
+          {
+            echo "### Coverity Environment Setup Summary"
+            echo ""
+            echo "- Python: $(python --version 2>&1)"
+            if [ -n "${COV_HOME:-}" ] && [ -x "${COV_HOME}/bin/coverity" ]; then
+              echo "- Coverity: $(${COV_HOME}/bin/coverity --version | head -n 1)"
+              echo "- COV_HOME: ${COV_HOME}"
+            else
+              echo "- Coverity: not available"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

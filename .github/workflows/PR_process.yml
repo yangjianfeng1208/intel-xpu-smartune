@@ -21,13 +21,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Proxy
         run: |
-          echo "https_proxy=http://child-prc.intel.com:913" >> $GITHUB_ENV
-          echo "http_proxy=http://child-prc.intel.com:913" >> $GITHUB_ENV
+          echo "https_proxy=http://proxy-dmz.intel.com:911" >> $GITHUB_ENV
+          echo "http_proxy=http://proxy-dmz.intel.com:911" >> $GITHUB_ENV
 
       - name: Run Trivy Scan via Local Docker
         env:
-          https_proxy: http://child-prc.intel.com:913
-          http_proxy: http://child-prc.intel.com:913
+          https_proxy: http://proxy-dmz.intel.com:911
+          http_proxy: http://proxy-dmz.intel.com:911
         run: |
           docker run --rm \
             --pull never \
@@ -43,8 +43,8 @@ jobs:
 
       # - name: Run Trivy Scan
       #   env:
-      #     https_proxy: http://child-prc.intel.com:913
-      #     http_proxy: http://child-prc.intel.com:913
+      #     https_proxy: http://proxy-dmz.intel.com:911
+      #     http_proxy: http://proxy-dmz.intel.com:911
       #   run: |
       #     trivy fs . \
       #       --severity HIGH,CRITICAL \
@@ -76,10 +76,23 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create temporary venv and install Bandit
+        shell: bash
+        run: |
+          python -m venv .venv-bandit
+          source .venv-bandit/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install bandit
+
       - name: Run Bandit Scan
         shell: bash
         run: |
-          source ${{ vars.COV_USER_HOME }}/myvenv/bin/activate
+          source .venv-bandit/bin/activate
 
           bandit -r . \
             -c $GITHUB_WORKSPACE/.github/static_check/ipas_default.config \
